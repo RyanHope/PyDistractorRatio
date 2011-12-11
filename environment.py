@@ -10,7 +10,7 @@ class DistractorRatio(Environment, Named):
     
     objects = None
     fixation_location = (0,0)
-    keypress = None
+    keypress = -1
     nfix = 1
     ratio = 0
     done = False
@@ -32,7 +32,7 @@ class DistractorRatio(Environment, Named):
     def reset(self):
         self.done = False
         self.nfix = 1
-        self.keypress = None
+        self.keypress = -1
         if len(self.pool) < 1:
             self.newPool()
         p = self.pool.pop()
@@ -59,14 +59,10 @@ class DistractorRatio(Environment, Named):
         farthest uncertainty maxima. The final two actions correspond to button
         presses, either A for target absent or P for target present.
         """
-        print ' %d' % (action),
         
-        if (action==6): # Press A key
-            self.keypress = 'A'
-        elif (action==7): # Press P key
-            self.keypress = 'P'
-        else:
+        if action==(None,None):
             self.nfix += 1
+        self.keypress = action
 
     def getObservation(self):
         """
@@ -82,19 +78,53 @@ class DistractorRatio(Environment, Named):
         reward unless the task is over at which point the reward/penalty is 
         based on number of fixations that were made before the task was over. 
         """
-        if self.keypress != None:
-            if self.keypress != None:
-                self.done = True # Keypress marks end of trial
-            if self.keypress == 'P' and self.hasTarget:
-                # Give a positive reward that decreases with number of fixations
-                return 100.0/self.nfix
-            elif self.keypress == 'A' and not self.hasTarget:
-                # Give a positive reward that decreases with number of fixations
-                return 100.0/self.nfix
+        
+        """
+        if self.keypress != -1:
+            self.done = True
+            if self.keypress == 1:
+                if self.hasTarget:
+                    return 50
+                else:
+                    return -25
+            elif self.keypress == 0:
+                if not self.hasTarget:
+                    return 50
+                else:
+                    return -25
+        return -1
+        """
+        
+        kp,flag = self.keypress
+        
+        if self.nfix > 100:
+            self.done = True
+            return 0
+        
+        if kp == None:
+            return 0
+        
+        self.done = True
+        
+        if self.hasTarget:
+            if flag:
+                if kp:
+                    reward = 150.0/self.nfix
+                else:
+                    reward = 50.0/self.nfix
             else:
-                # Give a negative reward equal to the number of fixations
-                return -1*self.nfix
-        return 0.0
+                if kp:
+                    reward = -3.0*self.nfix
+                else:
+                    reward = -6.0*self.nfix
+        else:
+            if kp:
+                reward = -4*self.nfix
+            else:
+                reward = 10.0/self.nfix
+        
+        return reward
+        
         
     def isFinished(self):
         """
@@ -105,6 +135,6 @@ class DistractorRatio(Environment, Named):
         performAction() function to ensure the reward/penalty is received by the
         the agent.
         """
-        if self.done or self.nfix > 200:
+        if self.done:
             return True
         return False

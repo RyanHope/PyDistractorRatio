@@ -4,8 +4,8 @@ __author__ = 'Ryan M. Hope <rmh3093@gmail.com>'
 
 import os, sys, atexit
 from environment import DistractorRatio
-from human import HumanAgent
-from pybrain.rl.experiments import EpisodicExperiment
+from human import HumanAgent, HumanExplorer
+from experiment import CustomEpisodicExperiment
 from pybrain.rl.learners.valuebased import NFQ, ActionValueNetwork
 try:
     from pybrain.tools.customxml.networkwriter import NetworkWriter
@@ -21,61 +21,35 @@ except:
 
 from numpy import array, arange, meshgrid, pi, zeros, mean
 
-if len(sys.argv) < 1:
+if len(sys.argv) < 2 or (int(sys.argv[1])<0 or int(sys.argv[1])>4):
+    print 'Must supply a model type:\n\t1 = Uncert&Salience, 2 = Salience, 3 = Uncert, 4 = Activation!'
+    sys.exit()
+
+if len(sys.argv) < 3:
     print 'Must supply an output file!'
     sys.exit()
 
-class CustomEpisodicExperiment(EpisodicExperiment):
-    """
-    The extension of Episodic Experiment to handle blocked episodic tasks and
-    custom logging. Normally, the episodic experiment just returns the collected
-    rewards, but we want to collect information about the distractor ratio, target
-    presence and the number of fixations.
-    """
 
-    def __init__(self, task, agent):
-        # Init the parent class
-        EpisodicExperiment.__init__(self, task, agent)
         
-    def doEpisodes(self, number = 1):
-        if self.doOptimization:
-            self.optimizer.maxEvaluations += number
-            self.optimizer.learn()
-        else:
-            all_rewards = []
-            all_ratios = []
-            all_tp = []
-            all_fix = []
-            for dummy in range(number):
-                self.agent.newEpisode()
-                rewards = []
-                self.stepid = 0
-                self.task.reset()
-                print ' -->',
-                while not self.task.isFinished():
-                    r = self._oneInteraction()
-                    rewards.append(r)
-                all_rewards.append(rewards)
-                all_ratios.append(self.task.ratio)
-                all_tp.append(self.task.hasTarget)
-                all_fix.append(self.task.nfix)
-                print ' <--'
-
-            return all_rewards,all_ratios,all_tp,all_fix
-
+type = int(sys.argv[1]) # 1 = Uncert&Salience, 2 = Salience, 3 = Uncert, 4 = Activation
 env = DistractorRatio() # Create an instance of the D-R task
 # Create an action/value neural net with an state space of 100 and an action space of 8
-module = ActionValueNetwork(100, 8)  
+if type == 1:
+    module = ActionValueNetwork(99, 7)
+else:
+    module = ActionValueNetwork(51, 4)
 learner = NFQ()
 learner.offPolicy = False # Disable off policy learning
+#learner.explorer = HumanExplorer()
 learner.explorer.epsilon = 0.4
-agent = HumanAgent(module, learner) # Create an agent that learns with NFQ
-testagent = HumanAgent(module, None) # Create a testing agent
+#learner.explorer.decay = 0.99
+agent = HumanAgent(module, learner, type) # Create an agent that learns with NFQ
+testagent = HumanAgent(module, None, type) # Create a testing agent
 experiment = CustomEpisodicExperiment(env, agent) # Put the agent in the environment
 
-if len(sys.argv) == 3:
+if len(sys.argv) == 4:
     print 'Loading saved net...'
-    module.network = NetworkReader.readFrom(sys.argv[2])
+    module.network = NetworkReader.readFrom(sys.argv[3])
 
 def save(history, net):
     """
@@ -83,7 +57,7 @@ def save(history, net):
     script gets closed. It saves the neural net and RL history of the agent so
     that it can be restored or reused in another model.
     """
-    base = os.path.splitext(sys.argv[1])[0]
+    base = os.path.splitext(sys.argv[2])[0]
     print 'Saving network to: ' + base + '.xml'
     NetworkWriter.writeToFile(net, base+'.xml')
     fileObject = open(base+'.history', 'w')
@@ -96,7 +70,7 @@ atexit.register(save, agent.history, module.network)
 performance = 0
 
 # Touch the model output file to make sure its empty
-f = open(sys.argv[1],'w')
+f = open(sys.argv[2],'w')
 f.close()
 
 while(True):
@@ -114,8 +88,8 @@ while(True):
         # ratios in the pool.
         experiment.doEpisodes(8)
         # Update the neural net based on all past experience.
-        agent.learn(1)
         print
+    agent.learn()
     
     print '=============== TESTING ===================='
     # Disable training mode. This will tell the environment to use the complete
@@ -123,7 +97,7 @@ while(True):
     experiment.task.train = False
     # Test the model using all 15 distractor ratios for both target present and
     # target absent trials. Do this 20 times without updating the neural net.
-    for i in range(0,20):
+    for i in range(0,1):
         # Generate a new randomized pool of distractor ratios
         experiment.task.newPool()
         # Switch to the testing agent so that testing trials don't get added to
@@ -133,7 +107,7 @@ while(True):
         # absent and target present trials) and collect some stats.
         x,y,z,w = experiment.doEpisodes(30)
         # Write the stats to a file.
-        f = open(sys.argv[1],'a')
+        f = open(sys.argv[2],'a')
         for i in range(0,len(x)):
             f.write('%d\t%d\t%f\t%d\t%f\n' % (performance,y[i],sum(x[i]),z[i],mean(w[i])))
         f.close()

@@ -1,16 +1,31 @@
 __author__ = 'Ryan M. Hope <rmh3093@gmail.com>'
 
 from pybrain.rl.agents import LearningAgent
+from pybrain.rl.agents.linearfa import LinearFA_Agent
+from pybrain.rl.explorers.discrete.egreedy import EpsilonGreedyExplorer
+from scipy import array
 from helpers import *
 
-class HumanAgent(LearningAgent):
+class HumanExplorer(EpsilonGreedyExplorer):
     
-    def __init__(self, module, learner = None):
-        LearningAgent.__init__(self, module, learner)
-        self.reset()
-        
-    def reset(self):
-        LearningAgent.reset(self)
+    agent = None
+
+    def _forwardImplementation(self, inbuf, outbuf):
+        EpsilonGreedyExplorer._forwardImplementation(self, inbuf, outbuf)
+        # If target is visible then stop exploring and end trial
+        if self.agent.targetVisible:
+            outbuf[:] = array([self.module.numActions-1])
+      
+class Human(object):
+    
+    def __init__(self, learner = None, type=1):
+        self.type = type
+        if self.type == 1:
+            self.nactions = 8
+        else:
+            self.nactions = 5
+            
+    def newEpisode(self):
         self.objects = self.uncertainty = self.uncertainty = None
         self.rx = np.linspace(-7,7,8)
         self.ry = np.linspace(-5,5,6)
@@ -18,7 +33,7 @@ class HumanAgent(LearningAgent):
         self.fixation_location = (0,0)
         self.targetVisible = 0
         self.nfix = 1
-    
+        
     def integrateObservation(self, obs):
         """
         This function updates the saliency and uncertainty maps after a 
@@ -30,6 +45,7 @@ class HumanAgent(LearningAgent):
             self.objects = obs
             
         self.objects = score(apply_availability(self.objects, self.fixation_location),'RO')
+        self.activation = pmap(self.x,self.y,self.objects,score=8)
         self.uncertainty = pmap(self.x,self.y,self.objects,score=9)
         self.saliency = pmap(self.x,self.y,self.objects,score=10)
         
@@ -38,36 +54,87 @@ class HumanAgent(LearningAgent):
         if targetVisible(self.objects):
             self.targetVisible = 1
         
-        maps = np.append(detect_peaks(self.uncertainty).flatten(),
-                         detect_peaks(self.saliency).flatten())
-        maps = np.append([self.nfix,self.targetVisible,self.fixation_location[0],self.fixation_location[1]],maps)
-        
-        LearningAgent.integrateObservation(self, maps)
-
+        if self.type == 1:
+            maps = np.append(detect_peaks(self.uncertainty).flatten(),detect_peaks(self.saliency).flatten())
+        elif self.type == 2:
+            maps = detect_peaks(self.saliency).flatten()
+        elif self.type == 3:
+            maps = detect_peaks(self.uncertainty).flatten()
+        elif self.type == 4:
+            maps = detect_peaks(self.activation).flatten()
+        return np.append([self.nfix,self.fixation_location[0],self.fixation_location[1],self.targetVisible],maps)
+    
     def getAction(self):
-        LearningAgent.getAction(self)
         action = int(self.lastaction)
-        maxu = get_maxima(self.uncertainty)
-        maxs = get_maxima(self.saliency)
+        
+        if self.type == 1:
+            max1 = get_maxima(self.uncertainty)
+            max2 = get_maxima(self.saliency)
+        elif self.type == 2:
+            max1 = get_maxima(self.saliency)
+        elif self.type == 3:
+            max1 = get_maxima(self.uncertainty)
+        elif self.type == 4:
+            max1 = get_maxima(self.activation)
+            
         newFix = False
-        if (action==0): # Set new fix to highest uncertainty maxima
-            newFix = get_highest(maxu)
-        elif (action==1): # Set new fix to nearest uncertainty maxima
-            newFix = get_nearest(maxu, self.fixation_location)
-        elif (action==2): # Set new fix to farthest uncertainty maxima
-            newFix = get_farthest(maxu, self.fixation_location)
-        elif (action==3): # Set new fix to highest saliency maxima
-            newFix = get_highest(maxs)
-        elif (action==4): # Set new fix to nearest saliency maxima
-            newFix = get_nearest(maxs, self.fixation_location)
-        elif (action==5): # Set new fix to farthest saliency maxima
-            newFix = get_farthest(maxs, self.fixation_location)
+        if (action==0):
+            newFix = get_highest(max1)
+        elif (action==1):
+            newFix = get_nearest(max1, self.fixation_location)
+        elif (action==2):
+            newFix = get_farthest(max1, self.fixation_location)
+        if self.type == 1:
+            if (action==3):
+                newFix = get_highest(max2)
+            elif (action==4):
+                newFix = get_nearest(max2, self.fixation_location)
+            elif (action==5):
+                newFix = get_farthest(max2, self.fixation_location)
 
-        if action<6:
+        print ' %d' % (action),
+
+        if action == self.nactions-1 or action == self.nactions-2:
+            return (self.nactions - action - 1, self.targetVisible)
+        else:
             # Convert grid location of maxima to x,y in visual angle
             self.fixation_location = (self.rx[newFix[1]],self.rx[newFix[0]])
-
             # Update the fixation count
-            self.nfix += 1
-            
-        return int(self.lastaction)
+            self.nfix += 1    
+            return (None,None)
+      
+class HumanAgent(LearningAgent, Human):
+    
+    def __init__(self, module, learner = None, type=1):
+        super(HumanAgent, self).__init__(module, learner)
+        Human.__init__(self, learner, type)
+        if learner:
+            self.learner.explorer.agent = self
+        
+    def newEpisode(self):
+        super(HumanAgent, self).newEpisode()
+        Human.newEpisode(self)
+        
+    def integrateObservation(self, obs):        
+        super(HumanAgent, self).integrateObservation(Human.integrateObservation(self, obs))
+
+    def getAction(self):
+        super(HumanAgent, self).getAction()
+        return Human.getAction(self)
+    
+class HumanAgent_LinearFA(LinearFA_Agent, Human):
+    
+    def __init__(self, learner, type=1, **kwargs):
+        super(HumanAgent_LinearFA, self).__init__(learner, **kwargs)
+        Human.__init__(self, learner, type)
+        
+    def newEpisode(self):
+        super(HumanAgent_LinearFA, self).newEpisode()
+        Human.newEpisode(self)
+        
+    def integrateObservation(self, obs):        
+        super(HumanAgent_LinearFA, self).integrateObservation(Human.integrateObservation(self, obs))
+
+    def getAction(self):
+        super(HumanAgent_LinearFA, self).getAction()
+        return Human.getAction(self)
