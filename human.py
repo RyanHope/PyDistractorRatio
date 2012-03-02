@@ -14,9 +14,10 @@ class Human( object ):
         if self.type == 1:
             self.saccade_types = 6
         self.button_types = self.learner.num_actions - self.saccade_types
+        self.gauss_blur = 0.5
 
     def newEpisode( self ):
-        self.objects = self.uncertainty = self.uncertainty = None
+        self.objects = self.uncertainty = self.saliency = None
         self.rx = np.linspace( -7, 7, 8 )
         self.ry = np.linspace( -5, 5, 6 )
         self.x, self.y = np.meshgrid( self.rx, self.ry )
@@ -35,9 +36,9 @@ class Human( object ):
             self.objects = obs
 
         self.objects = score( apply_availability( self.objects, self.fixation_location ), 'RO' )
-        self.activation = pmap( self.x, self.y, self.objects, score = 8 )
-        self.uncertainty = pmap( self.x, self.y, self.objects, score = 9 )
-        self.saliency = pmap( self.x, self.y, self.objects, score = 10 )
+        self.activation = pmap( self.x, self.y, self.objects, score = 8, s = self.gauss_blur )
+        self.uncertainty = pmap( self.x, self.y, self.objects, score = 9, s = self.gauss_blur )
+        self.saliency = pmap( self.x, self.y, self.objects, score = 10, s = self.gauss_blur )
 
         # If all features of target are visible let the agent know so that
         # it can learn to end a trial
