@@ -245,7 +245,7 @@ def activation( x, y, fx, fy, a, s ):
     """
     return a * np.exp( -( ( ( fx - x ) * ( fx - x ) + ( fy - y ) * ( fy - y ) ) ) / ( 2 * s * s ) )
 
-def pmap( x, y, objs, score = 9, s = 2 ):
+def pmap( x, y, objs, score = 9, s = 0.5 ):
     """
     Create a perceptual (topographic) map for a given score type.
     """
