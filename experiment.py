@@ -24,7 +24,7 @@ class CustomEpisodicExperiment( EpisodicExperiment ):
                 self.task.reset()
                 print ' -->',
                 while not self.task.isFinished():
-                    r = self._oneInteraction()
+                    r = self._oneInteraction() #error here from MCAgent!
                     rewards.append( r )
                 all_rewards.append( rewards )
                 all_ratios.append( self.task.ratio )

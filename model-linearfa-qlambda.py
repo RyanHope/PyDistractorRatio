@@ -38,7 +38,6 @@ else:
     learner = QLambda_LinFA( 5, 52 )
 
 learner.batchMode = True
-learner.learningRate = 0.05 # Default is 0.5
 agent = HumanAgent_LinearFA( learner, type ) # Create an agent that learns with QLambda_LinFA
 experiment = CustomEpisodicExperiment( env, agent ) # Put the agent in the environment
 
@@ -70,16 +69,16 @@ while( True ):
     print '=============== TRAINING ===================='
     performance = performance + 1
     # Train the model using distractor ratios 1,7,9,15 for both target present
-    # and target absent trials, then update the neural net. Do this 5 times in a row.
-    for i in range( 0, 5 ):
+    # and target absent trials, then update the neural net. Do this from 0 to N times in a row.
+    for i in range( 0, 100 ):
         # Set the task in training mode so that is knows to use the reduced set
         # of distractor ratios
-        experiment.task.train = True
+        experiment.task.train = False
         # Generate a new randomized pool of distractor ratios
         experiment.task.newPool()
         # Do 1 block of 8 distractors ratios, this will use up all the distractor
         # ratios in the pool.
-        experiment.doEpisodes( 12 )
+        experiment.doEpisodes( 30 )
         # Update the neural net based on all past experience.
         print
     agent.learn()
@@ -89,8 +88,8 @@ while( True ):
     # set of 15 distractor ratios when generating new pools.
     experiment.task.train = False
     # Test the model using all 15 distractor ratios for both target present and
-    # target absent trials. Do this 20 times without updating the neural net.
-    for i in range( 0, 10 ):
+    # target absent trials. Do this 20 times without learning.
+    for i in range( 0, 20 ):
         # Generate a new randomized pool of distractor ratios
         experiment.task.newPool()
         # Switch to the testing agent so that testing trials don't get added to

@@ -1,0 +1,24 @@
+This model has 3 different actions applied to potentially two different topographical representations of display information: move-to-nearest, highest, or farthest peak associated with uncertainty and/or salience:
+  highest-salience
+  nearest-salience
+  farthest-salience
+  highest-uncertainty
+  nearest-uncertainty
+  farthest-uncertainty
+
+Or, the model can randomly select between these actions, or randomly select an [x,y] location regardless of the 6 above. 
+
+To have the model randomly select between the highest, nearest, and farthest given a topographical map,
+set the paramaters in the helpers.py file so that actions are equally likely to be selected in selectAction():
+    zero = 17 	#highest uncertainty
+    one = 16  	#nearest uncertainty
+    two = 17  	#farthest uncertainty
+    three = 16	#highest salience
+    four = 17	#nearest salience
+    five = 17	#farthest salience
+
+and then call:  
+#         app      filename    type    outputfile              blocks   
+# to run: python DR-MC_Model.py 1 /home/chris/Desktop/SimData.xls 2
+
+If you change the type from 1 to 0, then the model will randomly select [x,y] regarless of the actions on topographical maps (i.e., truly random).

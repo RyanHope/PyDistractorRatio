@@ -1,8 +1,9 @@
 __author__ = 'Ryan M. Hope <rmh3093@gmail.com>'
 
-from random import choice, sample, uniform, gauss
+from random import choice, sample, uniform, gauss, random
 from math import ceil, sqrt
 import numpy as np
+import array
 from scipy.ndimage.filters import maximum_filter
 from scipy.ndimage.morphology import generate_binary_structure, binary_erosion
 import string
@@ -18,9 +19,9 @@ def generateObjects( r, present = 0, max = 48, rows = 6, cols = 8 ):
     of the object in visual angle with 0,0 being the dead center of the screen.
     The sixth column is 1 only for the target object, else the value is 0. The
     seventh and eighth columns are 1 only if the feature color or shape is
-    available, else the value is 0. The ninth though twelfth columns represent
+    available, else the value is 0. The ninth, tenth, and eleventh columns represent
     the activation, uncertainty and saliency scores of each object.
-
+    
     NOTE: This function is really only tested for 48 objects where the display
     has 6 rows and 8 columns.
     """
@@ -104,7 +105,7 @@ def objsASCII( objs, rows = 6, cols = 8 ):
     ascii = ''
     for r in np.reshape( symbols, ( rows, cols ) ):
         for c in range( 0, len( r ) ):
-            ascii = '%s%s ' % ( ascii, r[c] )
+            ascii = '%s%s, ' % ( ascii, r[c] )
         ascii = ascii[:-1] + '\n'
     return ascii[:-1]
 
@@ -124,26 +125,28 @@ def quadratic_availability( ecc, size, coefvar, intercept, x_coeff, x2_coeff, fo
             available = False
     return available
 
-def color_availability( ecc, size ):
+def color_availability( ecc, size, coeffofvar, x2_coeff ):
     """
     Color availability as in EPIC 4.
     """
-    return quadratic_availability( ecc, size, .7, .1, .1, .035 )
+    #print '   coefvar: %f   color: %f' % (coeffofvar,x2_coeff)
+    return quadratic_availability( ecc, size, coeffofvar, .1, .1, x2_coeff )
 
-def shape_availability( ecc, size ):
+def shape_availability( ecc, size, coeffofvar, x2_coeff ):
     """
     Shape availability as in EPIC 4.
     """
-    return quadratic_availability( ecc, size, .7, .1, .1, .3 )
+    #print '   coefvar: %f   shape: %f' % (coeffofvar,x2_coeff)
+    return quadratic_availability( ecc, size, coeffofvar, .1, .1, x2_coeff )
 
-def apply_availability( objs, fix ):
+def apply_availability( objs, fix, colorcoeff, shapecoeff, coeffofvar ):
     """
     Apply the color and shape availability functions to an objects maxtix.
     """
     for i in range( 0, len( objs ) ):
-        if color_availability( distance( objs[i, 3], objs[i, 4], fix[0], fix[1] ), 1.8 ):
+        if color_availability( distance( objs[i, 3], objs[i, 4], fix[0], fix[1] ), 1.8, coeffofvar, colorcoeff ):
             objs[i, 6] = True
-        if shape_availability( distance( objs[i, 3], objs[i, 4], fix[0], fix[1] ), 1.8 ):
+        if shape_availability( distance( objs[i, 3], objs[i, 4], fix[0], fix[1] ), 1.8, coeffofvar, shapecoeff ):
             objs[i, 7] = True
     return objs
 
@@ -166,7 +169,8 @@ def get_target( objs ):
 
 def targetVisible( objs ):
     """
-    Returns True if all of the features of the target object are visible, else
+    Returns True if all of the features of the target object are visible, elsex = score_uncertainty(experiment.agent.objects,
+
     it returns False.
     """
     for i in range( 0, len( objs ) ):
@@ -272,27 +276,39 @@ def get_maxima( map ):
     """
     return [( p, map[p[0], p[1]] ) for p, v in np.ndenumerate( detect_peaks( map ) ) if v]
 
-def get_highest( maxima ):
+def get_highest( maxima, fix ):
     """
     Returns the highest maxima in a vector of maxima.
     """
     val = 0
-    peak = None
+    peak = fix
     for m in maxima:
         if m[1] > val:
             val = m[1]
             peak = m[0]
     return peak
 
+def get_highest_val( maxima, fix ):
+    """
+    Returns the highest maxima value in a vector of maxima.
+    """
+    val = 0
+    peak = fix
+    for m in maxima:
+        if m[1] > val:
+            val = m[1]
+            peak = m[0]
+    return val
+
 def get_nearest( maxima, fix ):
     """
     Returns the maxima nearest to the given fixation point a vector of maxima.
     """
     val = 99999
-    peak = None
+    peak = fix #None CWM 8 Feb 2012
     for m in maxima:
         d = distance( fix[0], fix[1], m[0][0], m[0][1] )
-        if d < val:
+        if d < val and d > 0: #cwm added 'd > 0' on 8 Feb 2012
             val = d
             peak = m[0]
     return peak
@@ -301,11 +317,249 @@ def get_farthest( maxima, fix ):
     """
     Returns the maxima farthest from the given fixation point a vector of maxima.
     """
-    val = -1
-    peak = None
+    val = 0 #-1 CWM 8 Feb 2012
+    peak = fix
     for m in maxima:
         d = distance( fix[0], fix[1], m[0][0], m[0][1] )
         if d > val:
             val = d
             peak = m[0]
     return peak
+
+###############################################################################
+
+def sum_avail_features( objs ):
+    sum_feats = 0.0
+    for i in range( 48 ):
+        #print '%i' % objs[i,9]
+        sum_feats += objs[i, 9]
+    return sum_feats
+
+
+def all_feats_avail( objs ):
+    item_feats = []
+    for i in range( 48 ):
+        item_feats.append( [( objs[i, 1], objs[i, 2] ), objs[i, 9]] )
+    return item_feats
+
+def get_all_colors( obs ):
+    same_colors = 0.0
+    for i in range( 48 ):
+       if obs[i, 0] == 1 or obs[i, 0] == 3:
+          same_colors = same_colors + 1
+    return same_colors
+
+def get_all_shapes( obs ):
+    same_shapes = 0.0
+    for i in range( 48 ):
+       if obs[i, 0] == 2 or obs[i, 0] == 3:
+          same_shapes = same_shapes + 1
+    return same_shapes
+
+def get_same_enc_colors( obs ):
+    same_colors = 0.0
+    for i in range( 48 ):
+       if ( obs[i, 0] == 1 and obs[i, 6] == 1 ) or ( obs[i, 0] == 3 and obs[i, 6] == 1 ):
+          same_colors = same_colors + 1
+    return same_colors
+
+def get_same_enc_shapes( obs ):
+    same_shapes = 0.0
+    for i in range( 48 ):
+       if ( obs[i, 0] == 2 and obs[i, 7] == 1 ) or ( obs[i, 0] == 3 and obs[i, 7] == 1 ):
+          same_shapes = same_shapes + 1
+    return same_shapes
+#========================================================================================
+def get_all_enc_colors( obs ):
+    all_colors = 0.0
+    for i in range( 48 ):
+       if obs[i, 6] == 1:
+          all_colors = all_colors + 1
+    return all_colors
+
+def get_all_enc_shapes( obs ):
+    all_shapes = 0.0
+    for i in range( 48 ):
+       if obs[i, 7] == 1:
+          all_shapes = all_shapes + 1
+    return all_shapes
+
+def get_comp_items( obs ):
+    all_obs = 0.0
+    for i in range( 48 ):
+       if ( obs[i, 6] == 1 and obs[i, 7] == 1 ):
+          all_obs = all_obs + 1
+    return all_obs
+#========================================================================================
+
+
+def get_fixated_obj_color( obs, nFixes, loc ):
+    colorObs = nFixes
+    for i in range( 48 ):
+        if ( obs[i, 3] == loc[0] and obs[i, 4] == loc[1] ) and ( obs[i, 0] == 1 or obs[i, 0] == 3 ):
+            colorObs = colorObs + 1
+    return colorObs
+
+def get_fixated_obj_shape( obs, nFixes, loc ):
+    shapeObs = nFixes
+    for i in range( 48 ):
+        if ( obs[i, 3] == loc[0] and obs[i, 4] == loc[1] ) and ( obs[i, 0] == 2 or obs[i, 0] == 3 ):
+            shapeObs = shapeObs + 1
+    return shapeObs
+
+def get_peak_count( map ):
+    """
+    Returns the the number of locations with a peak was detected using detect_peaks.
+    """
+    #val = 0
+    peak_ct = 0
+    peaks = detect_peaks( map )
+    for r in range( 6 ):
+        for c in range( 8 ):
+            #print 'v = %f' % v[r,c]
+            if peaks[r, c] == True:
+                #print ' v = %f c = %f' % (v[r,c], criterion)
+                peak_ct += 1
+    return peak_ct
+
+def get_rand_loc():
+    loc = []
+    x = sample_wr( [0, 1, 2, 3, 4, 5], 1 )
+    y = sample_wr( [0, 1, 2, 3, 4, 5, 6, 7], 1 )
+    loc.append( x[0] )
+    loc.append( y[0] )
+    return loc
+
+
+def stop_absent( peak_type, nFixes, stop_crit ):
+    '''
+    Returns a boolean (True or False) regarding if the model should stop search and respond with target absent
+    '''
+
+    if nFixes >= stop_crit:
+        response = True
+    elif nFixes < stop_crit:
+        response = False
+
+
+    '''
+    Nfeats = sum_avail_features(peak_type)
+    if (Nfeats/96) > stop_crit:
+        response = False
+    elif (Nfeats/96) <= stop_crit:
+        response = True
+    '''
+    '''
+    Npeaks = get_peak_count(peak_type, peak_crit)
+    Speaks = get_peak_sum(peak_type)
+    print '   sum = %f' % Speaks
+    '''
+    '''
+    Number of Peaks:
+    if Npeaks > stop_crit:
+        response = False
+    elif Npeaks <= stop_crit:
+        response = True
+    '''
+    '''
+    Sum of Peaks:
+    if Speaks > stop_crit:
+        response = False
+    elif Speaks <= stop_crit:
+        response = True
+    '''
+
+    return response
+
+
+def get_peak_sum( values ):
+    """
+    Returns the the totalsum of values.
+    """
+    #val = 0
+    v = values
+    totalsum = 0.0
+    for r in range( 6 ):
+        for c in range( 8 ):
+            totalsum += v[r, c]
+    return totalsum
+
+
+def sample_wr( population, k ):
+    "Chooses k random elements (with replacement) from a population"
+    n = len( population )
+    _random, _int = random, int  # speed hack random.random
+    result = [None] * k
+    for i in xrange( k ):
+        j = _int( _random() * n )
+        result[i] = population[j]
+    return result
+
+def selectAction():
+    zero = 40 	#highest uncertainty
+    one = 15  	#nearest uncertainty
+    two = 15  	#farthest uncertainty
+    three = 10	#highest salience
+    four = 10	#nearest salience
+    five = 10	#farthest salience	
+    bag = []
+    for i in range( 0, zero ):
+	bag.append( 'zero' )
+    for i in range( 0, one ):
+	bag.append( 'one' )
+    for i in range( 0, two ):
+	bag.append( 'two' )
+    for i in range( 0, three ):
+	bag.append( 'three' )
+    for i in range( 0, four ):
+	bag.append( 'four' )
+    for i in range( 0, five ):
+	bag.append( 'five' )
+    samp = sample_wr( bag, 1 )
+    if samp[0] == 'zero':
+	return 0
+    elif samp[0] == 'one':
+	return 1
+    elif samp[0] == 'two':
+   	return 2
+    elif samp[0] == 'three':
+	return 3
+    elif samp[0] == 'four':
+	return 4
+    elif samp[0] == 'five':
+	return 5
+
+def getSaliencyData( filename, printcsv = False ):
+	fin = open( filename )
+	fin.readline() #PF
+	wh = fin.readline().split( " " ) #width height
+	width = int( wh[0] )
+	height = int( wh[1] )
+	#print width
+	#print height
+	line = fin.readline().strip()
+        #outname = 'RawVals-' + filename +'.csv'
+        #outfile = '/home/chris/Desktop/' + outname
+
+	#fout = open(outfile, 'a')
+
+	data = np.zeros( [width, height] )
+	for h in range( height ):
+		values = array.array( 'f' )
+		#values = array('float32')
+		values.read( fin, width )
+		row = ""
+                #fout.write('\n')
+		for w in range( width ):
+			if row != "": row = row + ","
+			data[w][h] = values[w]
+			v = str( values[w] )
+                        #v = values[w]
+			#fout.write('%.14f,' % v)
+			if v == '0.0':
+				v = '0'
+			row = row + v
+
+	fin.close()
+        #fout.close() 
+	return data

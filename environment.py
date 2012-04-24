@@ -1,6 +1,7 @@
 __author__ = 'Ryan M. Hope <rmh3093@gmail.com>'
 
 import sys
+import random
 from pybrain.utilities import Named
 from pybrain.rl.environments.environment import Environment
 from helpers import *
@@ -9,7 +10,7 @@ from math import ceil
 class DistractorRatio( Environment, Named ):
 
     objects = None
-    fixation_location = ( 0, 0 )
+    #fixation_location = (0,0)
     keypress = -1
     nfix = 1
     ratio = 0
@@ -48,11 +49,12 @@ class DistractorRatio( Environment, Named ):
             self.hasTarget = False
             self.ratio = p
 
-        print '~~~~~~~~~~~~~~~ Ratio %d, Has Target %d ~~~~~~~~~~~~~~~~~~~~~' % ( self.ratio, self.hasTarget )
+        #print '~~~~~~~~~~~~~~~ Ratio %d, Has Target %d ~~~~~~~~~~~~~~~~~~~~~' % (self.ratio,self.hasTarget)
         while True:
             self.objects = generateObjects( self.ratio, self.hasTarget )
-            if not targetVisible( apply_availability( self.objects, ( 0, 0 ) ) ):
-                return
+            return
+            #if not targetVisible(apply_availability(self.objects, (0,0),)):
+            #    return
 
     def performAction( self, action ):
         """
@@ -60,17 +62,18 @@ class DistractorRatio( Environment, Named ):
         is where the agent affects the world/state by performing some action.
         In this environment there are 8 actions. Three actions correspond to
         moving the eye to the highest, nearest and farthest saliency maxima.
-        Three actions correspond to moving the eye to the highest, nearest and
+        Three actions correspond to moving the eye to the highest, nearest and 
         farthest uncertainty maxima. The final two actions correspond to button
         presses, either A for target absent or P for target present.
         """
 
         action, num_actions, target_visible = action
+        #print '    action: %i, numacts: %i, targvis: %i' % (action, num_actions, target_visible)
 
         if action == -1:
             self.nfix += 1
-        self.targetVisible = target_visible
-        self.numActions = num_actions
+	self.targetVisible = target_visible
+	self.numActions = num_actions
         self.keypress = action
 
     def getObservation( self ):
@@ -96,8 +99,8 @@ class DistractorRatio( Environment, Named ):
     def getReward( self ):
         """
         This gets called after every action. In this task we always return 0
-        reward unless the task is over at which point the reward/penalty is
-        based on number of fixations that were made before the task was over.
+        reward unless the task is over at which point the reward/penalty is 
+        based on number of fixations that were made before the task was over. 
         """
 
         """
@@ -128,22 +131,40 @@ class DistractorRatio( Environment, Named ):
             accuracy = 1
         elif self.keypress == 0 and not self.hasTarget:
             accuracy = 1
-
+        
         if self.nfix > 1:
             return 100*accuracy - 1*self.nfix
         else:
             return -10
         """
-
-        if self.nfix > 49:
+        '''
+        if self.nfix>49:
             self.done = True
             return -0.001
+        '''
 
         if self.keypress == -1:
             return 0
 
         self.done = True
 
+	if self.hasTarget and self.keypress == 'present':
+            accuracy = 100.0
+            reward = accuracy / self.nfix
+	if self.hasTarget and self.keypress == 'absent':
+            accuracy = 0.0
+            reward = accuracy / self.nfix
+	if not self.hasTarget and self.keypress == 'present':
+            accuracy = 0.0
+            reward = accuracy / self.nfix
+	if not self.hasTarget and self.keypress == 'absent':
+            accuracy = 100.0
+	    reward = accuracy / self.nfix
+        if self.keypress == 'failure':
+            reward = 'failure'
+	return reward
+
+        '''
         if self.hasTarget and self.targetVisible and self.keypress:
             return 100
         elif self.hasTarget and self.targetVisible and not self.keypress:
@@ -156,7 +177,7 @@ class DistractorRatio( Environment, Named ):
             return -100
         elif not self.hasTarget and not self.targetVisible and not self.keypress:
             return 10
-
+        '''
 
     def isFinished( self ):
         """

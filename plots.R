@@ -1,5 +1,5 @@
 require(Hmisc)
-setwd("~/workspace/PyDistractorRatio/")
+setwd("~/Work/palm/Persistent&Generative Models/CBRA/Model/")
 
 group.CI <- function(response,factors=list(),flabel=list(),ci=0.95) {
 	if (!is.list(factors))
@@ -28,9 +28,10 @@ group.CI <- function(response,factors=list(),flabel=list(),ci=0.95) {
 }
 
 while (TRUE) {
-	d = read.delim("data/model1.txt",header=F)
+	d = read.delim("myers-v2-eg1.txt",header=F)
 	d = d[d$V3>0,]
-	#d = d[d$V1>=max(d$V1)-30,]
+        d = d[d$V1<max(d$V1)-max(d$V1)%%20,] #<=max may have to be <max
+	d = d[d$V1>=max(d$V1)-20,]
 	d.ucl = group.CI(d$V5, list(d$V2,d$V4), flabel=list("dr","cond"))
   d.ucl$dr = ordered(d.ucl$dr,levels=1:15)
 	p = xYplot(Cbind(mean,lower,upper)~numericScale(dr),group=as.factor(cond),data=d.ucl,type="l",label.curves=F,main=paste("Saliency+Uncertainty,Trials = ",max(d$V1),sep=""),ylab="Fixations",xlab="Distractor Ratio",auto.key=T)
